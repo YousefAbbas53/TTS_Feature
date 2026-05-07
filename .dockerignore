@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+outputs/
+temp/
+models/
+.ipynb_checkpoints/
+*.ipynb
+.git/
+.gitignore
