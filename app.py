@@ -62,6 +62,10 @@ async def remove_file(path: Path):
     except Exception as e:
         logging.error(f"Failed to delete {path}: {e}")
 
+@app.get("/", summary="Health Check")
+async def root():
+    return {"status": "success", "message": "TTS API is running perfectly on Hugging Face Spaces!", "endpoints": ["POST /generate"]}
+
 @app.post("/generate", summary="Generate TTS Audio from Text")
 async def generate_audio(request: TTSRequest, background_tasks: BackgroundTasks):
     if not request.text.strip():
