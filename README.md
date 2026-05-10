@@ -1,11 +1,3 @@
----
-title: TTS API
-emoji: 🗣️
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
----
 # Text-to-Speech (TTS) FastAPI Service
 
 This is a production-ready Text-to-Speech API built with FastAPI and `edge-tts`. It is optimized for asynchronous generation, handles long texts by chunking them, and is structured for deployment on GPU-enabled platforms like Vast.ai.
