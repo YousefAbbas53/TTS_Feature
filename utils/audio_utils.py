@@ -6,6 +6,25 @@ import urllib.request
 import logging
 from pathlib import Path
 from utils.config import SAMPLE_RATE, DIR_MODELS
+
+# --- MONKEY PATCH FOR TRANSFORMERS ---
+# Coqui-TTS tries to import functions that were removed in recent transformers versions.
+import transformers.utils.import_utils
+import transformers.pytorch_utils
+import torch
+from packaging.version import parse
+
+if not hasattr(transformers.utils.import_utils, "is_torch_greater_or_equal"):
+    def is_torch_greater_or_equal(version: str) -> bool:
+        return parse(torch.__version__) >= parse(version)
+    transformers.utils.import_utils.is_torch_greater_or_equal = is_torch_greater_or_equal
+
+if not hasattr(transformers.pytorch_utils, "isin_mps_friendly"):
+    def isin_mps_friendly(elements, test_elements, assume_unique=False, invert=False):
+        return torch.isin(elements, test_elements, assume_unique=assume_unique, invert=invert)
+    transformers.pytorch_utils.isin_mps_friendly = isin_mps_friendly
+# ---------------------------------------
+
 from TTS.api import TTS
 
 # Download default speaker wav if it doesn't exist
