@@ -11,18 +11,18 @@ DIR_MODELS = BASE_DIR / "models"
 for d in [DIR_TEMP, DIR_OUTPUT, DIR_MODELS]:
     d.mkdir(parents=True, exist_ok=True)
 
-# ---------- TTS (Edge-TTS) Configuration ----------
+# ---------- TTS (XTTS) Configuration ----------
 DEFAULT_VOICE_ID = "preset_1"
-CUSTOM_VOICE_NAME = None  # e.g. "en-US-GuyNeural"
-EDGE_RATE = "+0%"
-EDGE_PITCH = "+0Hz"
+CUSTOM_VOICE_NAME = None
 
+# For XTTS, presets represent path to local speaker wav files for voice cloning
+# If the file doesn't exist, we will use the default_speaker.wav
 VOICE_REGISTRY = {
-    "preset_1": "en-US-GuyNeural",
-    "preset_2": "en-US-JennyNeural",
-    "preset_3": "en-GB-RyanNeural",
-    "preset_4": "en-GB-SoniaNeural",
-    "preset_5": "ar-EG-SalmaNeural",
+    "preset_1": "default_speaker.wav",
+    "preset_2": "default_speaker.wav",
+    "preset_3": "default_speaker.wav",
+    "preset_4": "default_speaker.wav",
+    "preset_5": "default_speaker.wav",
 }
 
 # ---------- Text + Chunking ----------
@@ -34,8 +34,17 @@ MIN_CHARS = 20
 SAMPLE_RATE = 22050  # Output sample rate for consistent mono PCM wav
 
 def resolve_voice_name(voice_id: str, custom_name: str = None) -> str:
+    """Returns the filename of the speaker wav from the models directory."""
     if custom_name and str(custom_name).strip():
-        return str(custom_name).strip()
-    if voice_id not in VOICE_REGISTRY:
-        raise ValueError(f"Unknown VOICE_ID={voice_id}. Use {list(VOICE_REGISTRY.keys())} or set CUSTOM_VOICE_NAME.")
-    return VOICE_REGISTRY[voice_id]
+        speaker_filename = str(custom_name).strip()
+    else:
+        if voice_id not in VOICE_REGISTRY:
+            raise ValueError(f"Unknown VOICE_ID={voice_id}. Use {list(VOICE_REGISTRY.keys())} or set CUSTOM_VOICE_NAME.")
+        speaker_filename = VOICE_REGISTRY[voice_id]
+        
+    speaker_path = DIR_MODELS / speaker_filename
+    if not speaker_path.exists():
+        # Fallback to default speaker if preset file is missing
+        speaker_path = DIR_MODELS / "default_speaker.wav"
+        
+    return str(speaker_path)

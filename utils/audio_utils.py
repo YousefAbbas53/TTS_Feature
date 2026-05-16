@@ -1,31 +1,67 @@
 import asyncio
-import edge_tts
 import subprocess
 import wave
 import contextlib
+import urllib.request
+import logging
 from pathlib import Path
-from utils.config import EDGE_RATE, EDGE_PITCH, SAMPLE_RATE
+from utils.config import SAMPLE_RATE, DIR_MODELS
+from TTS.api import TTS
+
+# Download default speaker wav if it doesn't exist
+DEFAULT_SPEAKER_PATH = DIR_MODELS / "default_speaker.wav"
+if not DEFAULT_SPEAKER_PATH.exists():
+    logging.info("Downloading default speaker wav for XTTS presets...")
+    # Downloading a public domain 3-second audio sample for voice cloning
+    url = "https://actions.google.com/sounds/v1/human_voices/human_sniff.ogg" 
+    # Let's use a reliable sample wav from the official TTS repository
+    url = "https://huggingface.co/coqui/XTTS-v2/resolve/main/samples/en_sample.wav"
+    try:
+        urllib.request.urlretrieve(url, str(DEFAULT_SPEAKER_PATH))
+    except Exception as e:
+        logging.error(f"Failed to download default speaker: {e}")
+
+# Load XTTS v2 into GPU globally (Downloads ~2GB model on first run)
+logging.info("Loading Coqui XTTS v2 Model into GPU...")
+try:
+    tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=True)
+    logging.info("XTTS v2 Model loaded successfully!")
+except Exception as e:
+    logging.error(f"Failed to load XTTS v2 model: {e}")
+    tts_model = None
 
 def wav_duration_seconds(path: Path) -> float:
     with contextlib.closing(wave.open(str(path), "rb")) as wf:
         return wf.getnframes() / float(wf.getframerate())
 
-async def _edge_save_mp3(text: str, voice_name: str, out_mp3: Path, rate: str, pitch: str):
-    comm = edge_tts.Communicate(text=text, voice=voice_name, rate=rate, pitch=pitch)
-    await comm.save(str(out_mp3))
+def _generate_tts_sync(text: str, out_wav: Path, speaker_wav: str, lang: str):
+    """Synchronous generation using XTTS"""
+    if not tts_model:
+        raise RuntimeError("TTS model is not loaded.")
+        
+    tts_model.tts_to_file(
+        text=text,
+        speaker_wav=speaker_wav,
+        language=lang,
+        file_path=str(out_wav)
+    )
 
-async def tts_to_wav(text: str, out_wav: Path, voice_name: str) -> None:
+async def tts_to_wav(text: str, out_wav: Path, speaker_wav: str, lang: str = "en") -> None:
     """
-    Generates consistent PCM WAV (mono, SAMPLE_RATE) for easy concatenation.
+    Generates consistent PCM WAV asynchronously using thread pool to prevent blocking.
     """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
-    tmp_mp3 = out_wav.with_suffix(".tmp.mp3")
     
-    await _edge_save_mp3(text, voice_name, tmp_mp3, EDGE_RATE, EDGE_PITCH)
+    # Run the heavy synchronous GPU task in a thread
+    await asyncio.to_thread(_generate_tts_sync, text, out_wav, speaker_wav, lang)
 
-    # Convert mp3 to wav using ffmpeg
+    # Note: XTTS outputs 24kHz or 22050Hz wav files by default, 
+    # but we will force ffmpeg conversion to ensure strict consistency for concatenation.
+    tmp_wav = out_wav.with_suffix(".tmp.wav")
+    out_wav.rename(tmp_wav)
+
     process = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y", "-i", str(tmp_mp3),
+        "ffmpeg", "-y", "-i", str(tmp_wav),
         "-ac", "1", "-ar", str(SAMPLE_RATE), "-c:a", "pcm_s16le",
         str(out_wav),
         stdout=subprocess.PIPE,
@@ -34,10 +70,10 @@ async def tts_to_wav(text: str, out_wav: Path, voice_name: str) -> None:
     stdout, stderr = await process.communicate()
     
     if process.returncode != 0:
-        raise RuntimeError(f"FFmpeg failed with error:\\n{stderr.decode()}")
+        raise RuntimeError(f"FFmpeg failed with error:\n{stderr.decode()}")
 
     try:
-        tmp_mp3.unlink()
+        tmp_wav.unlink()
     except Exception:
         pass
 
