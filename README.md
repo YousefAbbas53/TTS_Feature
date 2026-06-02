@@ -1,41 +1,46 @@
 # Text-to-Speech (TTS) FastAPI Service
 
-This is a production-ready Text-to-Speech API built with FastAPI and `edge-tts`. It is optimized for asynchronous generation, handles long texts by chunking them, and is structured for deployment on GPU-enabled platforms like Vast.ai.
+A production-ready Text-to-Speech API built with FastAPI and Coqui XTTS v2. It handles long texts via automatic chunking, supports voice cloning, and is deployed on RunPod GPU instances.
 
 ## Project Structure
 
 ```
 project/
 ├── app.py                 # FastAPI application
-├── requirements.txt       # Dependencies
+├── requirements.txt       # Python dependencies
 ├── Dockerfile             # Docker configuration
 ├── .dockerignore          # Docker ignore file
-├── models/                # Directory for local models (if added later)
+├── models/                # Local model/speaker wav files
 ├── outputs/               # Temporary output directory for generated audio
 ├── temp/                  # Temporary chunk processing directory
 ├── utils/                 # Utility modules
 │   ├── config.py          # Configuration and settings
 │   ├── text_utils.py      # Text cleaning and chunking logic
-│   └── audio_utils.py     # TTS generation and audio concatenation logic
+│   ├── audio_utils.py     # TTS generation and audio concatenation logic
+│   └── file_utils.py      # File loading utilities (TXT, PDF, EPUB)
 └── README.md              # Documentation
 ```
 
 ## Features
 - **FastAPI / Uvicorn**: High-performance asynchronous API.
+- **Coqui XTTS v2**: Multilingual zero-shot voice cloning TTS model.
 - **Robust Chunking**: Automatically chunks long text inputs without breaking sentences.
-- **Edge-TTS Integration**: Uses Microsoft Edge's neural TTS service.
-- **GPU Readiness**: Includes `torch` and memory cleanup (`torch.cuda.empty_cache()`) for compatibility with Vast.ai templates, allowing easy drop-in of local GPU models later.
-- **Temp File Cleanup**: Automatically cleans up temporary chunks and output files after they are served.
+- **GPU Acceleration**: Full CUDA 11.8 support, model runs on GPU via RunPod.
+- **Voice Cloning**: Upload any `.wav` voice file to clone it for the output.
+- **Multi-format Input**: Accepts `.txt`, `.pdf`, `.epub`, and `.md` book files.
+- **Temp File Cleanup**: Automatically cleans up temporary chunks and output files after serving.
 
 ## How to Run Locally
 
 ### Prerequisites
 - Python 3.10+
 - `ffmpeg` installed on your system.
+- NVIDIA GPU with CUDA 11.8 (recommended) or CPU fallback.
 
 ### Steps
 1. Install dependencies:
    ```bash
+   pip install torch==2.1.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
    pip install -r requirements.txt
    ```
 2. Run the application:
@@ -54,32 +59,51 @@ project/
    ```bash
    docker run -p 8000:8000 --gpus all tts-fastapi
    ```
-   *(Note: `--gpus all` is optional if you are strictly using `edge-tts` but recommended if you are deploying to a GPU-enabled instance and plan to use local PyTorch models).*
 
-## How to Deploy on Vast.ai
+## How to Deploy on RunPod
 
-1. Spin up an instance on Vast.ai.
-2. Under "Template Configuration", select a base image such as `nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04` or simply check the box for "Use Custom Image" and enter `python:3.10` or a custom Docker Hub image if you have pushed yours.
-3. If using an unconfigured instance, SSH in and run:
+1. **Push your Docker image** to Docker Hub or GitHub Container Registry:
    ```bash
-   git clone <your-repo-url>
-   cd tts-repo
-   docker build -t tts-fastapi .
-   docker run -d -p 8000:8000 --gpus all tts-fastapi
+   docker build -t <your-dockerhub-username>/tts-fastapi:latest .
+   docker push <your-dockerhub-username>/tts-fastapi:latest
    ```
-4. Ensure port `8000` is mapped and exposed in your Vast.ai instance settings so you can reach the API externally.
+
+2. **Create a Pod on RunPod**:
+   - Go to [RunPod.io](https://runpod.io) → **Pods** → **+ New Pod**.
+   - Select a GPU template (e.g., RTX 3090 or A40 for XTTS v2).
+   - Under **Container Image**, enter your Docker Hub image: `<your-dockerhub-username>/tts-fastapi:latest`.
+   - Set **Container Port** to `8000`.
+   - Under **Environment Variables**, add any needed env vars.
+
+3. **Access your API**:
+   - Once the pod starts, RunPod provides a proxy URL like:  
+     `https://<pod-id>-8000.proxy.runpod.net`
+   - Visit `https://<pod-id>-8000.proxy.runpod.net/docs` for the interactive Swagger UI.
+
+> **Note**: On first start, Coqui XTTS v2 will download the model (~2GB) from HuggingFace.  
+> Subsequent restarts will use the cached model.
 
 ## API Usage
 
-### `POST /generate`
+### `GET /`
+Health check endpoint.
 
-**Endpoint**: `/generate`
+**Response**:
+```json
+{"status": "success", "message": "TTS API is running perfectly on RunPod!"}
+```
+
+---
+
+### `POST /generate`
+Generate speech from raw text.
+
 **Content-Type**: `application/json`
 
 **Request Body**:
 ```json
 {
-  "text": "Hello! This is a test of the Text to Speech API. It can handle very long text by splitting it appropriately.",
+  "text": "Hello! This is a test of the Text to Speech API.",
   "lang": "en",
   "voice_id": "preset_1"
 }
@@ -88,17 +112,36 @@ project/
 **Parameters**:
 - `text` (string, required): The text to synthesize.
 - `lang` (string, optional): Language code (e.g., `"en"`, `"ar"`). Defaults to `"en"`.
-- `voice_id` (string, optional): A preset voice from the registry (`preset_1` to `preset_5`). Defaults to `"preset_1"`.
-- `custom_voice_name` (string, optional): A specific Edge-TTS voice name (e.g., `"en-US-AriaNeural"`).
+- `voice_id` (string, optional): A preset voice (`preset_1` to `preset_5`). Defaults to `"preset_1"`.
+- `custom_voice_name` (string, optional): Ignored for XTTS (use `voice_file` in `/generate-from-file` instead).
 
-**Response**:
-Returns the generated audio file (`audio/wav`).
+**Response**: Returns the generated audio file (`audio/wav`).
 
-### Example using `curl`
-
+**Example (curl)**:
 ```bash
 curl -X POST "http://localhost:8000/generate" \
      -H "Content-Type: application/json" \
-     -d '{"text":"Welcome to the text to speech service.","voice_id":"preset_2"}' \
+     -d '{"text":"Welcome to the text to speech service.","lang":"en"}' \
      --output generated_speech.wav
+```
+
+---
+
+### `POST /generate-from-file`
+Generate speech from an uploaded document (TXT, PDF, EPUB) with optional voice cloning.
+
+**Content-Type**: `multipart/form-data`
+
+**Form Fields**:
+- `file` (required): The document file (`.txt`, `.pdf`, `.epub`, `.md`).
+- `voice_file` (optional): A `.wav` or `.mp3` file to clone the voice from.
+- `lang` (optional): Language code. Defaults to `"en"`.
+- `voice_id` (optional): Preset voice ID. Defaults to `"preset_1"`.
+
+**Example (curl)**:
+```bash
+curl -X POST "http://localhost:8000/generate-from-file" \
+     -F "file=@mybook.pdf" \
+     -F "lang=en" \
+     --output audiobook.wav
 ```

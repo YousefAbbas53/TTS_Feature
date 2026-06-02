@@ -1,4 +1,4 @@
-# Use an official NVIDIA CUDA base image with Ubuntu 22.04 to ensure Vast.ai compatibility and GPU support
+# Use an official NVIDIA CUDA base image with Ubuntu 22.04 for RunPod GPU support
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # Set non-interactive to avoid prompts during apt-get
@@ -18,9 +18,9 @@ WORKDIR /app
 # Upgrade pip for better dependency resolution
 RUN pip3 install --no-cache-dir --upgrade pip
 
-# Install PyTorch explicitly for CUDA 11.8 to ensure full Vast.ai compatibility
-# (Done before other requirements to ensure correct indexing)
-RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# Install PyTorch explicitly for CUDA 11.8 to ensure full RunPod GPU compatibility
+# (Done before other requirements to ensure correct CUDA indexing)
+RUN pip3 install --no-cache-dir torch==2.1.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Copy the requirements file into the container
 COPY requirements.txt .

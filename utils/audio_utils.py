@@ -107,7 +107,7 @@ async def concat_wavs_by_timeline(wav_paths: list[Path], out_wav: Path):
     with concat_file.open("w", encoding="utf-8") as f:
         for p in wav_paths:
             # ffmpeg concat demuxer requires absolute paths or relative to the list file
-            f.write(f"file '{str(p.resolve())}'\\n")
+            f.write(f"file '{str(p.resolve())}'\n")
 
     process = await asyncio.create_subprocess_exec(
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),

@@ -53,8 +53,8 @@ async def startup_event():
 class TTSRequest(BaseModel):
     text: str = Field(..., description="Text to synthesize into speech")
     lang: str = Field(DEFAULT_LANG, description="Language code (e.g., 'en', 'ar')")
-    voice_id: str = Field(DEFAULT_VOICE_ID, description="Voice ID from registry")
-    custom_voice_name: Optional[str] = Field(None, description="Direct Voice name, e.g. 'en-US-GuyNeural'")
+    voice_id: str = Field(DEFAULT_VOICE_ID, description="Preset voice ID from registry (preset_1 to preset_5)")
+    custom_voice_name: Optional[str] = Field(None, description="Custom speaker wav filename inside the models/ directory (e.g. 'my_voice.wav')")
 
 async def remove_file(path: Path):
     """Background task to safely remove a file after returning it with a 30-second delay."""
@@ -68,7 +68,7 @@ async def remove_file(path: Path):
 
 @app.get("/", summary="Health Check")
 async def root():
-    return {"status": "success", "message": "TTS API is running perfectly on Hugging Face Spaces!", "endpoints": ["POST /generate"]}
+    return {"status": "success", "message": "TTS API is running perfectly on RunPod!", "endpoints": ["/generate", "/generate-from-file"]}
 
 @app.post("/generate", summary="Generate TTS Audio from Text")
 async def generate_audio(request: TTSRequest, background_tasks: BackgroundTasks):
@@ -93,27 +93,20 @@ async def generate_audio(request: TTSRequest, background_tasks: BackgroundTasks)
         if not chunks:
             raise HTTPException(status_code=400, detail="No valid text found after cleaning.")
 
-        # 2. Generate Audio for each chunk sequentially using a global lock to prevent GPU OOM
-        async def safe_tts(chunk_text, chunk_wav_path, voice, lang):
-            async with gpu_tts_lock:
-                return await tts_to_wav(chunk_text, chunk_wav_path, voice, lang)
-
-        tasks = []
+        # 2. Generate Audio for each chunk sequentially (GPU can only handle one chunk at a time)
+        successful_wav_paths = []
         chunk_wav_paths = []
-        
+
         for i, chunk in enumerate(chunks):
             chunk_wav = req_temp_dir / f"chunk_{i:04d}.wav"
             chunk_wav_paths.append(chunk_wav)
-            tasks.append(safe_tts(chunk, chunk_wav, str(DEFAULT_SPEAKER_PATH), request.lang))
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        successful_wav_paths = []
-        for path, result in zip(chunk_wav_paths, results):
-            if isinstance(result, Exception):
-                logging.error(f"Failed to generate TTS for chunk {path}: {result}")
-            else:
-                successful_wav_paths.append(path)
+            try:
+                async with gpu_tts_lock:
+                    await tts_to_wav(chunk, chunk_wav, voice_name, request.lang)
+                successful_wav_paths.append(chunk_wav)
+                logging.info(f"[{req_id}] Chunk {i+1}/{len(chunks)} done.")
+            except Exception as e:
+                logging.error(f"[{req_id}] Chunk {i} failed: {e}")
 
         if not successful_wav_paths:
             logging.error(f"All TTS chunks failed for request {req_id}")
@@ -156,7 +149,7 @@ async def generate_audio_from_file(
     voice_file: UploadFile = File(None, description="Optional custom voice reference (.wav, .mp3) for zero-shot cloning"),
     lang: str = Form(DEFAULT_LANG, description="Language code (e.g., 'en', 'ar')"),
     voice_id: str = Form(DEFAULT_VOICE_ID, description="Voice ID from registry"),
-    custom_voice_name: Optional[str] = Form(None, description="Direct Voice name, e.g. 'en-US-GuyNeural'")
+    custom_voice_name: Optional[str] = Form(None, description="Custom speaker wav filename inside the models/ directory (overrides voice_id if set)")
 ):
     """
     Accepts a document file, extracts the text, and processes it into speech.
@@ -220,27 +213,20 @@ async def generate_audio_from_file(
         if not chunks:
             raise HTTPException(status_code=400, detail="No valid text found after cleaning.")
 
-        # 2. Generate Audio for each chunk sequentially using a global lock to prevent GPU OOM
-        async def safe_tts(chunk_text, chunk_wav_path, voice, language):
-            async with gpu_tts_lock:
-                return await tts_to_wav(chunk_text, chunk_wav_path, voice, language)
-
-        tasks = []
+        # 2. Generate Audio for each chunk sequentially (GPU can only handle one chunk at a time)
+        successful_wav_paths = []
         chunk_wav_paths = []
-        
+
         for i, chunk in enumerate(chunks):
             chunk_wav = req_temp_dir / f"chunk_{i:04d}.wav"
             chunk_wav_paths.append(chunk_wav)
-            tasks.append(safe_tts(chunk, chunk_wav, str(speaker_wav_path), lang))
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        successful_wav_paths = []
-        for path, result in zip(chunk_wav_paths, results):
-            if isinstance(result, Exception):
-                logging.error(f"Failed to generate TTS for chunk {path}: {result}")
-            else:
-                successful_wav_paths.append(path)
+            try:
+                async with gpu_tts_lock:
+                    await tts_to_wav(chunk, chunk_wav, str(speaker_wav_path), lang)
+                successful_wav_paths.append(chunk_wav)
+                logging.info(f"[{req_id}] Chunk {i+1}/{len(chunks)} done.")
+            except Exception as e:
+                logging.error(f"[{req_id}] Chunk {i} failed: {e}")
 
         if not successful_wav_paths:
             logging.error(f"All TTS chunks failed for request {req_id}")
