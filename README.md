@@ -127,21 +127,77 @@ curl -X POST "http://localhost:8000/generate" \
 
 ---
 
-### `POST /generate-from-file`
-Generate speech from an uploaded document (TXT, PDF, EPUB) with optional voice cloning.
+### `POST /generate-from-file` (Asynchronous Job Submission)
+Generate speech from an uploaded document (TXT, PDF, EPUB, MD) with optional zero-shot voice cloning. This endpoint returns immediately with a `job_id`.
 
 **Content-Type**: `multipart/form-data`
 
 **Form Fields**:
 - `file` (required): The document file (`.txt`, `.pdf`, `.epub`, `.md`).
-- `voice_file` (optional): A `.wav` or `.mp3` file to clone the voice from.
-- `lang` (optional): Language code. Defaults to `"en"`.
-- `voice_id` (optional): Preset voice ID. Defaults to `"preset_1"`.
+- `voice_file` (optional): A `.wav`, `.mp3`, `.ogg`, or `.flac` audio file to clone the speaker's voice.
+- `lang` (optional): Language code (e.g., `"en"`, `"ar"`). Defaults to `"en"`.
+- `voice_id` (optional): Preset voice ID (`preset_1` to `preset_5`). Defaults to `"preset_1"`.
+- `custom_voice_name` (optional): Custom speaker wav filename inside the `models/` directory.
+
+**Response**:
+```json
+{
+  "job_id": "dc08bc8e9488",
+  "message": "Job submitted successfully. Poll the status URL for progress.",
+  "status_url": "/job-status/dc08bc8e9488",
+  "download_url": "/download/dc08bc8e9488"
+}
+```
 
 **Example (curl)**:
 ```bash
 curl -X POST "http://localhost:8000/generate-from-file" \
      -F "file=@mybook.pdf" \
-     -F "lang=en" \
-     --output audiobook.wav
+     -F "lang=ar" \
+     -F "voice_id=preset_1"
 ```
+
+---
+
+### `GET /job-status/{job_id}`
+Get the real-time status and processing progress of a submitted job.
+
+**Response**:
+```json
+{
+  "job_id": "dc08bc8e9488",
+  "status": "processing",
+  "progress": 45,
+  "done_chunks": 55,
+  "total_chunks": 120,
+  "message": "Processing chunk 55/120",
+  "error": null
+}
+```
+
+**Statuses**:
+- `queued`: Waiting in line to process.
+- `processing`: Active generation (check `progress` 0-100%).
+- `completed`: Successfully generated audio.
+- `failed`: An error occurred during synthesis (check `error` for detail).
+
+**Example (curl)**:
+```bash
+curl -X GET "http://localhost:8000/job-status/dc08bc8e9488"
+```
+
+---
+
+### `GET /download/{job_id}`
+Download the completed `.wav` audiobook file.
+
+**Response**:
+- Returns the `.wav` audio file directly.
+
+> **CRITICAL NOTE**: Once a file is successfully downloaded, it and its job record are automatically and permanently deleted from the GPU server after 60 seconds. The backend team **must** upload the file to their own cloud storage (S3, GCS, etc.) immediately upon downloading.
+
+**Example (curl)**:
+```bash
+curl -X GET "http://localhost:8000/download/dc08bc8e9488" --output output.wav
+```
+
