@@ -13,7 +13,7 @@ import logging
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# GPU logic removed as edge-tts operates via API
+# GPU logic removed as coqui-XTTS operates via API
 
 from utils.config import (
     DIR_TEMP, DIR_OUTPUT, DEFAULT_LANG, DEFAULT_VOICE_ID, 
@@ -28,7 +28,7 @@ gpu_tts_lock = asyncio.Lock()
 
 app = FastAPI(
     title="TTS FastAPI Service",
-    description="Production-ready Text-to-Speech API using Edge-TTS",
+    description="Production-ready Text-to-Speech API using coqui-XTTS",
     version="1.0.0"
 )
 
