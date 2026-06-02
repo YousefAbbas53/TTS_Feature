@@ -13,6 +13,8 @@ from pathlib import Path
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# GPU logic removed as coqui-XTTS operates via API
+
 from utils.config import (
     DIR_TEMP, DIR_OUTPUT, DEFAULT_LANG, DEFAULT_VOICE_ID,
     resolve_voice_name, MAX_CHARS, MIN_CHARS
@@ -47,9 +49,8 @@ JOB_TTL_SECONDS = 2 * 60 * 60  # 2 hours before auto-cleanup
 
 app = FastAPI(
     title="TTS FastAPI Service",
-    description="Async Job-Based Text-to-Speech API using Coqui XTTS v2. "
-                "Submit a document, get a job_id, poll for progress, download when done.",
-    version="2.0.0"
+    description="Production-ready Text-to-Speech API using coqui-XTTS",
+    version="1.0.0"
 )
 
 
