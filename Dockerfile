@@ -34,24 +34,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the default speaker WAV so workers don't need internet at startup
 RUN mkdir -p /app/models && \
-    wget -q -O /app/models/default_speaker.wav \
+    curl -fsSL -o /app/models/default_speaker.wav \
     "https://huggingface.co/coqui/XTTS-v2/resolve/main/samples/en_sample.wav" || \
     echo "WARNING: Speaker WAV download failed, will retry at runtime"
 
-# Pre-download the XTTS v2 model weights into the image (avoids cold-start downloads)
-RUN python3 -c "
-import os, traceback
-os.environ['COQUI_TOS_AGREED'] = '1'
-print('Loading TTS model...')
-try:
-    from TTS.api import TTS
-    model = TTS('tts_models/multilingual/multi-dataset/xtts_v2', gpu=False)
-    print('Model loaded successfully!')
-except Exception as e:
-    print('ERROR loading model:', e)
-    traceback.print_exc()
-    raise
-"
+# Copy the preload script and run it to bake model weights into the image
+COPY preload_model.py .
+RUN python3 preload_model.py
 
 # Copy the rest of the application code
 COPY . .
