@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir --upgrade pip
 # Available cu128 versions: 2.7.0, 2.7.1, 2.8.0+ (2.6.0 does NOT exist in cu128)
 RUN pip install --no-cache-dir --upgrade \
     torch==2.7.0 \
+    torchvision==0.22.0 \
     torchaudio==2.7.0 \
     --index-url https://download.pytorch.org/whl/cu128
 
