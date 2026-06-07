@@ -84,7 +84,10 @@ def upload_to_s3(file_path: Path, object_name: str) -> Optional[str]:
         )
         
         # Build the final public download URL
-        if not endpoint:
+        public_url_prefix = os.environ.get("S3_PUBLIC_URL_PREFIX") or os.environ.get("PUBLIC_URL_PREFIX")
+        if public_url_prefix:
+            public_url = f"{public_url_prefix.rstrip('/')}/{object_name}"
+        elif not endpoint:
             # Standard AWS S3 URL
             public_url = f"https://{bucket_name}.s3.{region_name}.amazonaws.com/{object_name}"
         else:
