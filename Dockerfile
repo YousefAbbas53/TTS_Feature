@@ -29,6 +29,10 @@ RUN pip install --no-cache-dir \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Accept the Coqui TTS CPML license and pre-download the XTTS v2 model weights
+ENV COQUI_TOS_AGREEMENT=1
+RUN python3 -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2', gpu=False)"
+
 # Copy the rest of the application code
 COPY . .
 
