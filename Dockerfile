@@ -21,6 +21,13 @@ WORKDIR /app
 # Upgrade pip
 RUN pip install --no-cache-dir --upgrade pip
 
+# Upgrade PyTorch to 2.6.0 with CUDA 12.8 (required for Blackwell GPUs - RTX PRO 6000 Series)
+# PyTorch 2.4.0 in the base image does NOT have SM_100 (Blackwell) kernels
+RUN pip install --no-cache-dir --upgrade \
+    torch==2.6.0 \
+    torchaudio==2.6.0 \
+    --index-url https://download.pytorch.org/whl/cu128
+
 # Install coqui-tts and its dependencies first (heavy package - separate layer for caching)
 RUN pip install --no-cache-dir \
     "coqui-tts>=0.24.2,<0.28" \
