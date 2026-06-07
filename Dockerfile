@@ -1,39 +1,45 @@
-# Use an official NVIDIA CUDA base image with Ubuntu 22.04 for RunPod GPU support
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# Use CUDA 12.4 base image - matches torch 2.5.1+cu124 used in production
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 # Set non-interactive to avoid prompts during apt-get
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.10, pip, build-essential, python3-dev, git, ffmpeg, and libsndfile1
+# Install Python 3.11, pip, ffmpeg, git and audio dependencies
 RUN apt-get update && apt-get install -y \
-    python3 \
+    python3.11 \
+    python3.11-dev \
     python3-pip \
-    build-essential \
-    python3-dev \
-    git \
+    python3.11-distutils \
     ffmpeg \
     libsndfile1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Make python3.11 the default python3
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+    && update-alternatives --set python3 /usr/bin/python3.11
+
+# Upgrade pip
+RUN python3 -m pip install --no-cache-dir --upgrade pip
+
+# Install PyTorch 2.5.1 with CUDA 12.4 (matches tested production environment)
+RUN pip install --no-cache-dir \
+    torch==2.5.1 \
+    torchvision \
+    torchaudio \
+    --index-url https://download.pytorch.org/whl/cu124
 
 # Set the working directory
 WORKDIR /app
 
-# Upgrade pip for better dependency resolution
-RUN pip3 install --no-cache-dir --upgrade pip
-
-# Install PyTorch explicitly for CUDA 11.8 to ensure full RunPod GPU compatibility
-# (Done before other requirements to ensure correct CUDA indexing)
-RUN pip3 install --no-cache-dir torch==2.1.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-
-# Copy the requirements file into the container
+# Copy requirements first (for better Docker layer caching)
 COPY requirements.txt .
 
-# Install dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
 COPY . .
 
 # Run the RunPod serverless handler
 CMD ["python3", "-u", "handler.py"]
-
