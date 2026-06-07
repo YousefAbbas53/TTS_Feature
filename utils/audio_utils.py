@@ -9,10 +9,14 @@ from utils.config import SAMPLE_RATE, DIR_MODELS
 
 # --- MONKEY PATCH FOR TRANSFORMERS ---
 # Coqui-TTS tries to import functions that were removed in recent transformers versions.
+import os
+import traceback as _traceback
 import transformers.utils.import_utils
 import transformers.pytorch_utils
 import torch
 from packaging.version import parse
+
+os.environ.setdefault("COQUI_TOS_AGREED", "1")
 
 if not hasattr(transformers.utils.import_utils, "is_torch_greater_or_equal"):
     def is_torch_greater_or_equal(version: str) -> bool:
@@ -25,28 +29,34 @@ if not hasattr(transformers.pytorch_utils, "isin_mps_friendly"):
     transformers.pytorch_utils.isin_mps_friendly = isin_mps_friendly
 # ---------------------------------------
 
-from TTS.api import TTS
+logging.info("Importing TTS library...")
+try:
+    from TTS.api import TTS
+    logging.info("TTS library imported successfully.")
+except Exception as _import_err:
+    logging.error(f"CRITICAL: Failed to import TTS library: {_import_err}")
+    logging.error(_traceback.format_exc())
+    raise SystemExit(f"Cannot import TTS: {_import_err}")
 
 # Download default speaker wav if it doesn't exist
 DEFAULT_SPEAKER_PATH = DIR_MODELS / "default_speaker.wav"
 if not DEFAULT_SPEAKER_PATH.exists():
     logging.info("Downloading default speaker wav for XTTS presets...")
-    # Downloading a public domain 3-second audio sample for voice cloning
-    url = "https://actions.google.com/sounds/v1/human_voices/human_sniff.ogg" 
-    # Let's use a reliable sample wav from the official TTS repository
     url = "https://huggingface.co/coqui/XTTS-v2/resolve/main/samples/en_sample.wav"
     try:
         urllib.request.urlretrieve(url, str(DEFAULT_SPEAKER_PATH))
+        logging.info("Default speaker WAV downloaded successfully.")
     except Exception as e:
         logging.error(f"Failed to download default speaker: {e}")
 
-# Load XTTS v2 into GPU globally (Downloads ~2GB model on first run)
+# Load XTTS v2 into GPU globally (model weights are pre-baked into the Docker image)
 logging.info("Loading Coqui XTTS v2 Model into GPU...")
 try:
     tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=True)
     logging.info("XTTS v2 Model loaded successfully!")
 except Exception as e:
-    logging.error(f"Failed to load XTTS v2 model: {e}")
+    logging.error(f"CRITICAL: Failed to load XTTS v2 model: {e}")
+    logging.error(_traceback.format_exc())
     tts_model = None
 
 def wav_duration_seconds(path: Path) -> float:
