@@ -1,6 +1,6 @@
-# Use RunPod's official PyTorch base image (Python 3.11 + CUDA 12.4 + PyTorch 2.5.1 pre-installed)
+# Use RunPod's official PyTorch base image (Python 3.11 + CUDA 12.4 + PyTorch 2.4.0 pre-installed)
 # This avoids CUDA/torch install issues and matches the tested production environment
-FROM runpod/pytorch:2.5.1-py3.11-cuda12.4.1-devel-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 # Set non-interactive to avoid prompts during apt-get
 ENV DEBIAN_FRONTEND=noninteractive
