@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir --upgrade pip
 # Install coqui-tts and its dependencies first (heavy package - separate layer for caching)
 RUN pip install --no-cache-dir \
     "coqui-tts>=0.24.2,<0.28" \
-    coqpit \
+    coqpit-config \
     "transformers>=4.40.0,<5.0" \
     tokenizers
 
