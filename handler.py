@@ -141,9 +141,16 @@ async def handler(job):
     book_url = job_input.get("book_url")
     book_text = job_input.get("book_text")
     voice_url = job_input.get("voice_url")
-    voice_id = job_input.get("voice_id", DEFAULT_VOICE_ID)
+    voice_id = job_input.get("voice_id")
     lang = job_input.get("lang", DEFAULT_LANG)
     custom_voice_name = job_input.get("custom_voice_name")
+
+    # Safeguard: if voice_id is a URL, treat it as voice_url
+    if voice_id and (voice_id.startswith("http://") or voice_id.startswith("https://")):
+        voice_url = voice_id
+        voice_id = DEFAULT_VOICE_ID
+    elif not voice_id:
+        voice_id = DEFAULT_VOICE_ID
 
     # Validate inputs
     if not book_url and not book_text:
