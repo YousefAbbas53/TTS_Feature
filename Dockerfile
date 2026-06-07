@@ -4,10 +4,13 @@ FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 # Set non-interactive to avoid prompts during apt-get
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.10, pip, ffmpeg, and libsndfile1 for audio processing stability
+# Install Python 3.10, pip, build-essential, python3-dev, git, ffmpeg, and libsndfile1
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    build-essential \
+    python3-dev \
+    git \
     ffmpeg \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
